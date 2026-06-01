@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LTF Data Dashboard Report</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Latino Task Force</p>
+        <h1>Data Dashboard Report</h1>
+        <p>Executive summary of families served, demographics, ZIP codes, age groups, gender, and languages.</p>
+      </div>
+      <form method="post" enctype="multipart/form-data" class="upload-box">
+        <span>Upload CSV if the Google Sheet is private</span>
+        <input type="file" name="file" accept=".csv">
+        <button type="submit">Load CSV</button>
+      </form>
+    </header>
+
+    {% if error %}
+      <div class="error">
+        <h2>Could not load the sheet automatically</h2>
+        <p>{{ error }}</p>
+        <p>Fix: Google Sheets → Share → General Access → Anyone with the link → Viewer, or download as CSV and upload it above.</p>
+      </div>
+    {% endif %}
+
+    {% if report %}
+      <section class="kpis">
+        <div class="kpi"><span>{{ "{:,}".format(report.families_served) }}</span><p>Families Served</p></div>
+        <div class="kpi"><span>{{ "{:,}".format(report.total_rows) }}</span><p>Total Records</p></div>
+        <div class="kpi"><span>{{ report.latinx_percent }}%</span><p>Latinx Clients</p></div>
+        <div class="kpi"><span>{{ report.female_percent }}%</span><p>Female Clients</p></div>
+      </section>
+
+      <section class="panel findings">
+        <h2>Key Findings</h2>
+        <ul>
+          {% for item in report.findings %}<li>{{ item }}</li>{% endfor %}
+        </ul>
+      </section>
+
+      <section class="grid two">
+        <div class="panel"><h2>Race / Ethnicity</h2><canvas id="raceChart"></canvas></div>
+        <div class="panel"><h2>Gender</h2><canvas id="genderChart"></canvas></div>
+      </section>
+
+      <section class="grid two">
+        <div class="panel"><h2>Age Groups</h2><canvas id="ageChart"></canvas></div>
+        <div class="panel"><h2>Top Languages</h2><canvas id="languageChart"></canvas></div>
+      </section>
+
+      <section class="grid two">
+        <div class="panel"><h2>Top 10 ZIP Codes</h2><canvas id="zipChart"></canvas></div>
+        <div class="panel">
+          <h2>Top 10 ZIP Codes</h2>
+          <table>
+            <thead><tr><th>ZIP Code</th><th>Count</th><th>%</th></tr></thead>
+            <tbody>
+              {% for row in report.top_zip_rows %}
+                <tr><td>{{ row.Category }}</td><td>{{ "{:,}".format(row.Count) }}</td><td>{{ row.Percent }}%</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel full compact">
+        <details>
+          <summary>Open full details / audit tables</summary>
+          <div class="audit-grid">
+            {% macro simple_table(title, rows) %}
+              <div>
+                <h3>{{ title }}</h3>
+                <table>
+                  <thead><tr><th>Category</th><th>Count</th><th>%</th></tr></thead>
+                  <tbody>
+                    {% for row in rows %}
+                      <tr><td>{{ row.Category }}</td><td>{{ "{:,}".format(row.Count) }}</td><td>{{ row.Percent }}%</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endmacro %}
+            {{ simple_table('Race / Ethnicity', report.race_rows) }}
+            {{ simple_table('Gender', report.gender_rows) }}
+            {{ simple_table('Age Groups', report.age_rows) }}
+            {{ simple_table('Languages', report.language_rows) }}
+            {{ simple_table('All Non-Zero ZIP Codes', report.zip_rows) }}
+          </div>
+        </details>
+      </section>
+
+      <script>
+        const raceData = {{ report.race_rows | tojson }};
+        const genderData = {{ report.gender_rows | tojson }};
+        const ageData = {{ report.age_rows | tojson }};
+        const languageData = {{ report.top_language_rows | tojson }};
+        const zipData = {{ report.top_zip_rows | tojson }};
+
+        const palette = ['#5b3f8c', '#7e57c2', '#9b7bd3', '#bfaddf', '#d7ccef', '#9aa4b2', '#d1d5db'];
+
+        function doughnutChart(id, data) {
+          new Chart(document.getElementById(id), {
+            type: 'doughnut',
+            data: {
+              labels: data.map(x => x.Category),
+              datasets: [{ data: data.map(x => x.Count), backgroundColor: palette }]
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } },
+                tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.raw.toLocaleString()} records` } }
+              }
+            }
+          });
+        }
+
+        function horizontalBar(id, data) {
+          new Chart(document.getElementById(id), {
+            type: 'bar',
+            data: {
+              labels: data.map(x => x.Category),
+              datasets: [{ data: data.map(x => x.Count), backgroundColor: '#7e57c2', borderRadius: 8 }]
+            },
+            options: {
+              responsive: true,
+              indexAxis: 'y',
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { beginAtZero: true, grid: { color: '#edf0f5' } },
+                y: { grid: { display: false } }
+              }
+            }
+          });
+        }
+
+        doughnutChart('raceChart', raceData);
+        doughnutChart('genderChart', genderData);
+        horizontalBar('ageChart', ageData);
+        horizontalBar('languageChart', languageData);
+        horizontalBar('zipChart', zipData);
+      </script>
+    {% endif %}
+  </div>
+</body>
+</html>
